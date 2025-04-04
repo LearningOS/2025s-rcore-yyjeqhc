@@ -14,11 +14,13 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use hashbrown::HashMap;
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use lazy_static::*;
 use switch::__switch;
+use core::mem::{MaybeUninit, self};
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
@@ -51,10 +53,33 @@ lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-        }; MAX_APP_NUM];
+        
+
+        let mut tasks = {
+            // 创建一个未初始化的 `MaybeUninit` 数组。
+            // `assume_init` 是安全的，因为我们声称这里已经初始化的类型是一堆 `MaybeUninit`，不需要初始化。
+            // 创建未初始化的数组
+            let mut tasks: [MaybeUninit<TaskControlBlock>; MAX_APP_NUM] = unsafe { MaybeUninit::uninit().assume_init() };
+            
+            // 在运行时初始化每个元素
+            for i in 0..MAX_APP_NUM {
+                tasks[i] = MaybeUninit::new(TaskControlBlock {
+                    task_cx: TaskContext::zero_init(),
+                    task_status: TaskStatus::UnInit,
+                    task_syscall_count: HashMap::new(),
+                });
+            }
+            
+                // 一切都已初始化。
+                // 将数组转换为初始化的类型。
+                unsafe { mem::transmute::<_, [TaskControlBlock; MAX_APP_NUM]>(tasks) }
+        };
+
+        // let mut tasks = [TaskControlBlock {
+        //     task_cx: TaskContext::zero_init(),
+        //     task_status: TaskStatus::UnInit,
+        //     task_syscall_count: HashMap::new(),  //新任务，还没有系统调用
+        // }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
@@ -135,6 +160,20 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+    //把当前任务的系统调用次数+1
+    fn set_task_syscall_count(&self,syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].set_task_syscall_count(syscall_id);
+        // inner.tasks[current].task_syscall_count += 1;
+        // info!("current task: {} count: {}",current,inner.tasks[current].task_syscall_count);
+        // println!("current task: {} count: {}",current,inner.tasks[current].task_syscall_count);
+    }
+    fn get_current_task_syscall_count(&self,syscall_id: usize) -> usize {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].get_task_syscall_count(syscall_id)
+    }
 }
 
 /// Run the first task in task list.
@@ -168,4 +207,14 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+///记录当前任务系统调用的次数
+pub fn set_task_syscall_count(syscall_id: usize) {
+    TASK_MANAGER.set_task_syscall_count(syscall_id);
+}
+
+/// 获取当前任务系统调用的次数
+pub fn get_current_task_syscall_count(syscall_id: usize) -> usize {
+    TASK_MANAGER.get_current_task_syscall_count(syscall_id)
 }
