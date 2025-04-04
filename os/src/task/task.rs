@@ -1,7 +1,6 @@
 //! Types related to task management
 
 use super::TaskContext;
-use crate::syscall::*;
 use hashbrown::HashMap;
 /// The task control block (TCB) of a task.
 #[derive(Clone)]
@@ -17,59 +16,12 @@ pub struct TaskControlBlock {
 impl TaskControlBlock {
     /// 记录某种系统调用的次数
     pub fn set_task_syscall_count(&mut self, syscall_id: usize) {
-        match syscall_id {
-            SYSCALL_WRITE => {
-                self.task_syscall_count.insert(SYSCALL_WRITE, self.task_syscall_count.get(&SYSCALL_WRITE).unwrap_or(&0) + 1);
-                return;
-            }
-            SYSCALL_EXIT =>{
-                self.task_syscall_count.insert(SYSCALL_EXIT, self.task_syscall_count.get(&SYSCALL_EXIT).unwrap_or(&0) + 1);
-                return;
-            }
-            SYSCALL_YIELD => {
-                self.task_syscall_count.insert(SYSCALL_YIELD, self.task_syscall_count.get(&SYSCALL_YIELD).unwrap_or(&0) + 1);
-                return;
-            }
-            SYSCALL_GET_TIME => {
-                self.task_syscall_count.insert(SYSCALL_GET_TIME, self.task_syscall_count.get(&SYSCALL_GET_TIME).unwrap_or(&0) + 1);
-                return;
-            }
-            SYSCALL_TRACE => {
-                self.task_syscall_count.insert(SYSCALL_TRACE, self.task_syscall_count.get(&SYSCALL_TRACE).unwrap_or(&0) + 1);
-                return;
-            },
-            _ => {
+        self.task_syscall_count.insert(syscall_id, self.task_syscall_count.get(&syscall_id).unwrap_or(&0) + 1);
 
-            },
-        }
     }
     ///获取某种系统调用的次数
     pub fn get_task_syscall_count(&self,syscall_id: usize) -> usize {
-        match syscall_id {
-            SYSCALL_WRITE => {
-                return *self.task_syscall_count.get(&SYSCALL_WRITE).unwrap_or(&0);
-            }
-            SYSCALL_EXIT =>{
-                return *self.task_syscall_count.get(&SYSCALL_EXIT).unwrap_or(&0);
-
-            }
-            SYSCALL_YIELD => {
-                return *self.task_syscall_count.get(&SYSCALL_YIELD).unwrap_or(&0);
-
-            }
-            SYSCALL_GET_TIME => {
-                return *self.task_syscall_count.get(&SYSCALL_GET_TIME).unwrap_or(&0);
-
-            }
-            SYSCALL_TRACE => {
-                return *self.task_syscall_count.get(&SYSCALL_TRACE).unwrap();
-
-            },
-            _ => {
-
-            },
-        }
-        return 0;
+        return *self.task_syscall_count.get(&syscall_id).unwrap_or(&0);
     }
 }
 
